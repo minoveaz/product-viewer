@@ -1,6 +1,6 @@
 {
   "name": "@minoveaz/product-viewer",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Reusable 2D and 3D product preview with configurable image and text layers",
   "license": "UNLICENSED",
   "type": "module",

@@ -7,7 +7,7 @@ No genera modelos desde imagen o texto: solo previsualiza y personaliza un objet
 ## Instalación
 
 ```bash
-npm install github:minoveaz/product-viewer#v0.1.0
+npm install github:minoveaz/product-viewer#v0.1.2
 ```
 
 Requiere como peer dependencies: `react`, `react-dom`, `three`, `@react-three/fiber` y `@react-three/drei`.
