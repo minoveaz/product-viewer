@@ -171,41 +171,40 @@ function GlbObject({ url }: { url: string }) {
   return <primitive object={copy} />;
 }
 
-/** Places the camera so the whole object, its shadow and a margin fit the canvas in both directions. */
-function FitCamera({ width, height }: { width: number; height: number }) {
+/** Frames the object's bounding sphere so it stays fully visible at any rotation, using the tighter of the two FOVs. */
+function FitCamera({ radius }: { radius: number }) {
   const camera = useThree((state) => state.camera) as THREE.PerspectiveCamera;
   const size = useThree((state) => state.size);
 
   useEffect(() => {
-    const halfFov = THREE.MathUtils.degToRad(camera.fov / 2);
+    const vFov = THREE.MathUtils.degToRad(camera.fov);
     const aspect = size.width / size.height;
-    const halfHeight = (height / 2 + width * 0.12) * 1.2;
-    const halfWidth = (width / 2) * 1.3;
-    const distance = Math.max(halfHeight / Math.tan(halfFov), halfWidth / (Math.tan(halfFov) * aspect));
+    const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
+    const fov = Math.min(vFov, hFov);
+    const distance = (radius * 1.04) / Math.sin(fov / 2);
     camera.position.set(0, 0, distance);
     camera.lookAt(0, 0, 0);
+    camera.near = distance / 100;
+    camera.far = distance * 4;
     camera.updateProjectionMatrix();
-  }, [camera, size, width, height]);
+  }, [camera, size, radius]);
 
   return null;
 }
 
 export function Product3D({ source, layers, model = { kind: 'extrude' }, className, label = 'Vista 3D del producto' }: Product3DProps) {
-  const { width, height } = sizeOf(source);
+  const { width, height, thickness } = sizeOf(source);
+  const radius = Math.sqrt(width * width + height * height + thickness * thickness) / 2;
   return (
     <div role="img" aria-label={label} className={className}>
-      <Canvas
-        camera={{ fov: 30, near: 0.1, far: width * 40 }}
-        dpr={[1, 2]}
-        gl={{ antialias: true, alpha: true, toneMapping: THREE.NoToneMapping }}
-      >
-        <FitCamera width={width} height={height} />
+      <Canvas camera={{ fov: 30 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true, toneMapping: THREE.NoToneMapping }}>
+        <FitCamera radius={radius} />
         <StudioEnvironment />
         <ambientLight intensity={0.55} />
         <directionalLight position={[-width, height * 2, width * 2]} intensity={0.9} />
         {model.kind === 'glb' ? <GlbObject url={model.url} /> : <ExtrudedObject source={source} layers={layers} />}
-        <ContactShadows position={[0, -height / 2 - width * 0.12, 0]} opacity={0.3} scale={width * 3} blur={3} far={width * 2} />
-        <OrbitControls enablePan={false} minDistance={width * 1.5} maxDistance={width * 6} />
+        <ContactShadows position={[0, -radius - width * 0.04, 0]} opacity={0.3} scale={radius * 3} blur={3} far={radius * 2} />
+        <OrbitControls enablePan={false} minDistance={radius * 1.2} maxDistance={radius * 8} />
       </Canvas>
     </div>
   );
