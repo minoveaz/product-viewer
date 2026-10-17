@@ -16,7 +16,7 @@ Requiere como peer dependencies: `react`, `react-dom`, `three`, `@react-three/fi
 
 ```tsx
 import { useState } from 'react';
-import { ProductViewer, ViewToggle, type Layer, type ViewMode } from '@minoveaz/product-viewer';
+import { FaceToggle, ProductViewer, ViewToggle, type Layer, type ProductFace, type ViewMode } from '@minoveaz/product-viewer';
 
 const source = {
   baseImage: '/images/tag-front.png',
@@ -33,10 +33,12 @@ const layers: Layer[] = [
 
 function Preview() {
   const [view, setView] = useState<ViewMode>('2d');
+  const [side, setSide] = useState<ProductFace>('front');
   return (
     <>
       <ViewToggle value={view} onChange={setView} />
-      <ProductViewer view={view} source={source} layers={layers} className="h-96 w-full" />
+      {view === '2d' && <FaceToggle value={side} onChange={setSide} />}
+      <ProductViewer view={view} source={source} frontLayers={layers} backLayers={[]} side={side} className="h-96 w-full" />
     </>
   );
 }
@@ -50,12 +52,13 @@ El motor 3D se carga de forma diferida: solo se descarga cuando se muestra la vi
 
 | Campo | Tipo | Descripción |
 | --- | --- | --- |
-| `baseImage` | `string` | Imagen frontal del objeto. |
+| `baseImage` | `string` | Imagen base del objeto, recortada por el contorno y el agujero físico. |
 | `outline` | `Point[]` | Contorno cerrado, normalizado 0–1 sobre la imagen. |
 | `hole` | `{ x, y, r }` (opcional) | Agujero (p. ej. anilla), normalizado. `r` respecto al ancho. |
 | `widthMm` | `number` | Ancho real en milímetros. |
 | `heightMm` | `number` (opcional) | Alto real. Si falta, se deduce de la proporción del contorno. |
 | `thicknessMm` | `number` | Grosor real en milímetros. |
+| `sideColor` | `string` (opcional) | Color del material de los cantos extruidos; por defecto conserva el dorado actual. |
 
 ### `Layer`
 
@@ -64,9 +67,13 @@ El motor 3D se carga de forma diferida: solo se descarga cuando se muestra la vi
 
 ### Componentes y funciones
 
-- `ProductViewer` — `view: '2d' | '3d'`, `source`, `layers`, `model?`, `className?`, `label?`, `fallback?`.
-- `Product2D` — solo vista plana SVG.
+- `ProductViewer` — `view: '2d' | '3d'`, `source`, `layers?`, `frontLayers?`, `backLayers?`, `side?`, `model?`, `className?`, `label?`, `fallback?`.
+- `layers` conserva la API anterior: se usa en ambas caras cuando no se proporciona una lista específica. `frontLayers` y `backLayers` reemplazan ese fallback para su cara respectiva; usa `[]` para dejar una cara sin capas.
+- En 2D, `side: 'front' | 'back'` selecciona la cara (por defecto `'front'`). `FaceToggle` ofrece un selector accesible Frontal/Reverso para conectarlo con estado React.
+- En el modelo extruido 3D, las listas frontal y trasera se asignan a tapas independientes; `sideColor` permite adaptar el color metálico de los cantos al acabado.
+- `Product2D` — solo vista plana SVG; acepta `layers?`, `frontLayers?`, `backLayers?` y `side?`.
 - `ViewToggle` — selector 2D/3D accesible (`aria-pressed`).
+- `FaceToggle` — selector frontal/reverso accesible (`aria-pressed`).
 - `composeArtwork(source, layers)` — genera el canvas de la cara frontal.
 
 ## Desarrollo

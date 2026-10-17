@@ -10,7 +10,9 @@ export type Model3D = { kind: 'extrude' } | { kind: 'glb'; url: string };
 
 interface Product3DProps {
   source: ProductSource;
-  layers: Layer[];
+  layers?: Layer[];
+  frontLayers?: Layer[];
+  backLayers?: Layer[];
   model?: Model3D;
   className?: string;
   label?: string;
@@ -116,34 +118,64 @@ function buildGeometry(source: ProductSource): THREE.ExtrudeGeometry {
   }
   uv.needsUpdate = true;
   geo.computeVertexNormals();
+  const [caps, sides] = geo.groups;
+  geo.clearGroups();
+  geo.addGroup(caps.start, caps.count / 2, 2);
+  geo.addGroup(caps.start + caps.count / 2, caps.count / 2, 0);
+  geo.addGroup(sides.start, sides.count, 1);
   return geo;
 }
 
 /** Front and back caps show the artwork; the rounded edge stays metal. */
-function ExtrudedObject({ source, layers }: { source: ProductSource; layers: Layer[] }) {
+function ExtrudedObject({
+  source,
+  frontLayers,
+  backLayers,
+}: {
+  source: ProductSource;
+  frontLayers: Layer[];
+  backLayers: Layer[];
+}) {
   const geometry = useMemo(() => buildGeometry(source), [source]);
-  const layersKey = JSON.stringify(layers);
-  const [textures, setTextures] = useState<{ color: THREE.CanvasTexture; relief: THREE.CanvasTexture } | null>(null);
+  const layersKey = JSON.stringify([frontLayers, backLayers]);
+  const [textures, setTextures] = useState<{
+    front: THREE.CanvasTexture;
+    back: THREE.CanvasTexture;
+    frontRelief: THREE.CanvasTexture;
+    backRelief: THREE.CanvasTexture;
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    let created: { color: THREE.CanvasTexture; relief: THREE.CanvasTexture } | null = null;
-    composeArtwork(source, layers).then((canvas) => {
+    let created: {
+      front: THREE.CanvasTexture;
+      back: THREE.CanvasTexture;
+      frontRelief: THREE.CanvasTexture;
+      backRelief: THREE.CanvasTexture;
+    } | null = null;
+    Promise.all([composeArtwork(source, frontLayers), composeArtwork(source, backLayers)]).then(([frontCanvas, backCanvas]) => {
       if (cancelled) return;
-      const color = new THREE.CanvasTexture(canvas);
-      color.colorSpace = THREE.SRGBColorSpace;
-      color.anisotropy = 8;
-      const relief = new THREE.CanvasTexture(composeEngravingMask(layers));
-      relief.anisotropy = 8;
-      created = { color, relief };
+      const front = new THREE.CanvasTexture(frontCanvas);
+      const back = new THREE.CanvasTexture(backCanvas);
+      front.colorSpace = THREE.SRGBColorSpace;
+      back.colorSpace = THREE.SRGBColorSpace;
+      front.anisotropy = 8;
+      back.anisotropy = 8;
+      const frontRelief = new THREE.CanvasTexture(composeEngravingMask(frontLayers));
+      const backRelief = new THREE.CanvasTexture(composeEngravingMask(backLayers));
+      frontRelief.anisotropy = 8;
+      backRelief.anisotropy = 8;
+      created = { front, back, frontRelief, backRelief };
       setTextures(created);
     });
     return () => {
       cancelled = true;
-      created?.color.dispose();
-      created?.relief.dispose();
+      created?.front.dispose();
+      created?.back.dispose();
+      created?.frontRelief.dispose();
+      created?.backRelief.dispose();
     };
-    // layersKey stands in for `layers` so inline arrays do not retrigger composition.
+    // layersKey stands in for the layer arrays so inline values do not retrigger composition.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, layersKey]);
 
@@ -152,15 +184,24 @@ function ExtrudedObject({ source, layers }: { source: ProductSource; layers: Lay
   return (
     <mesh geometry={geometry}>
       <meshStandardMaterial
-        key={textures?.color.uuid ?? 'no-texture'}
+        key={textures?.front.uuid ?? 'no-front-texture'}
         attach="material-0"
-        map={textures?.color ?? null}
-        bumpMap={textures?.relief ?? null}
+        map={textures?.front ?? null}
+        bumpMap={textures?.frontRelief ?? null}
         bumpScale={2}
         metalness={0.05}
         roughness={0.62}
       />
-      <meshStandardMaterial attach="material-1" color={SIDE} metalness={0.2} roughness={0.5} />
+      <meshStandardMaterial attach="material-1" color={source.sideColor ?? SIDE} metalness={0.2} roughness={0.5} />
+      <meshStandardMaterial
+        key={textures?.back.uuid ?? 'no-back-texture'}
+        attach="material-2"
+        map={textures?.back ?? null}
+        bumpMap={textures?.backRelief ?? null}
+        bumpScale={2}
+        metalness={0.05}
+        roughness={0.62}
+      />
     </mesh>
   );
 }
@@ -181,7 +222,7 @@ function FitCamera({ radius }: { radius: number }) {
     const aspect = size.width / size.height;
     const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
     const fov = Math.min(vFov, hFov);
-    const distance = (radius * 1.04) / Math.sin(fov / 2);
+    const distance = (radius * 1.6) / Math.sin(fov / 2);
     camera.position.set(0, 0, distance);
     camera.lookAt(0, 0, 0);
     camera.near = distance / 100;
@@ -192,9 +233,19 @@ function FitCamera({ radius }: { radius: number }) {
   return null;
 }
 
-export function Product3D({ source, layers, model = { kind: 'extrude' }, className, label = 'Vista 3D del producto' }: Product3DProps) {
+export function Product3D({
+  source,
+  layers,
+  frontLayers,
+  backLayers,
+  model = { kind: 'extrude' },
+  className,
+  label = 'Vista 3D del producto',
+}: Product3DProps) {
   const { width, height, thickness } = sizeOf(source);
   const radius = Math.sqrt(width * width + height * height + thickness * thickness) / 2;
+  const resolvedFrontLayers = frontLayers ?? layers ?? [];
+  const resolvedBackLayers = backLayers ?? layers ?? [];
   return (
     <div role="img" aria-label={label} className={className}>
       <Canvas camera={{ fov: 30 }} dpr={[1, 2]} gl={{ antialias: true, alpha: true, toneMapping: THREE.NoToneMapping }}>
@@ -202,7 +253,11 @@ export function Product3D({ source, layers, model = { kind: 'extrude' }, classNa
         <StudioEnvironment />
         <ambientLight intensity={0.55} />
         <directionalLight position={[-width, height * 2, width * 2]} intensity={0.9} />
-        {model.kind === 'glb' ? <GlbObject url={model.url} /> : <ExtrudedObject source={source} layers={layers} />}
+        {model.kind === 'glb' ? (
+          <GlbObject url={model.url} />
+        ) : (
+          <ExtrudedObject source={source} frontLayers={resolvedFrontLayers} backLayers={resolvedBackLayers} />
+        )}
         <ContactShadows position={[0, -radius - width * 0.04, 0]} opacity={0.3} scale={radius * 3} blur={3} far={radius * 2} />
         <OrbitControls enablePan={false} minDistance={radius * 1.2} maxDistance={radius * 8} />
       </Canvas>

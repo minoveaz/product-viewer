@@ -1,9 +1,12 @@
 import { useId } from 'react';
-import type { Layer, ProductSource } from './types';
+import type { Layer, ProductFace, ProductSource } from './types';
 
 interface Product2DProps {
   source: ProductSource;
-  layers: Layer[];
+  layers?: Layer[];
+  frontLayers?: Layer[];
+  backLayers?: Layer[];
+  side?: ProductFace;
   className?: string;
   label?: string;
 }
@@ -19,8 +22,17 @@ function silhouettePath(source: ProductSource): string {
   return d;
 }
 
-export function Product2D({ source, layers, className, label = 'Vista previa del producto' }: Product2DProps) {
+export function Product2D({
+  source,
+  layers,
+  frontLayers,
+  backLayers,
+  side = 'front',
+  className,
+  label = 'Vista previa del producto',
+}: Product2DProps) {
   const clipId = `silhouette-${useId().replace(/:/g, '')}`;
+  const visibleLayers = side === 'front' ? frontLayers ?? layers ?? [] : backLayers ?? layers ?? [];
   return (
     <svg viewBox="0 0 1 1" role="img" aria-label={label} className={className}>
       <defs>
@@ -31,7 +43,7 @@ export function Product2D({ source, layers, className, label = 'Vista previa del
       <g clipPath={`url(#${clipId})`}>
         <image href={source.baseImage} x={0} y={0} width={1} height={1} preserveAspectRatio="xMidYMid meet" />
       </g>
-      {layers.map((layer) =>
+      {visibleLayers.map((layer) =>
         layer.type === 'image' ? (
           <image
             key={layer.id}

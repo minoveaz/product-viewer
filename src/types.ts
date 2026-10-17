@@ -31,6 +31,8 @@ export interface TextLayer {
 
 export type Layer = ImageLayer | TextLayer;
 
+export type ProductFace = 'front' | 'back';
+
 export interface ProductSource {
   /** Square front artwork of the object (e.g. the product photo on white). */
   baseImage: string;
@@ -47,6 +49,8 @@ export interface ProductSource {
   heightMm?: number;
   /** Real thickness in millimetres. */
   thicknessMm: number;
+  /** Optional color for the extruded edge material. */
+  sideColor?: string;
 }
 
 export type ViewMode = '2d' | '3d';
